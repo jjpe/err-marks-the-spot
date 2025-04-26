@@ -1,6 +1,6 @@
-[package]
-name = "error-context"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
+[workspace]
+resolver = "2"
+members = [
+    "error-context-macro",
+    "error-context-test"
+]

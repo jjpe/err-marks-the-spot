@@ -1,5 +1,5 @@
 {
-  description = "A dev shell for the error-context library";
+  description = "A dev shell for the error-context workspace";
 
   inputs = {
     nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable";

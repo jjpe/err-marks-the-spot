@@ -1,0 +1,7 @@
+[package]
+name = "error-context-test"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+error-context-macro = { path = "../error-context-macro" }
