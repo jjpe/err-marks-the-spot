@@ -1,26 +1,30 @@
 //!
 
-use proc_macro::TokenStream;
-use proc_macro2::{Ident as Ident2, Span as Span2, TokenStream as TokenStream2};
-use quote::quote;
+use proc_macro::{
+    token_stream::IntoIter,
+    TokenStream, TokenTree,
+};
+use proc_macro2::{
+    Ident as Ident2, Punct as Punct2, Spacing as Spacing2, Span as Span2,
+    TokenStream as TokenStream2, TokenTree as TokenTree2,
+};
+use quote::{quote, ToTokens};
+use std::iter::Peekable;
 use syn::{
     parse_macro_input,
-    token::{And, Brace, Colon, Gt, Lt, Paren, PathSep, Pub},
-    AngleBracketedGenericArguments, Data, DataEnum, DataStruct, DeriveInput,
-    Field, FieldMutability, GenericArgument, Fields, FieldsNamed, FieldsUnnamed,
-    Lifetime, Path, PathArguments, PathSegment, Type, TypePath, TypeReference,
+    token::{And, Brace, Bracket, Colon, Gt, Lt, Paren, Pound, PathSep, Pub},
+    AngleBracketedGenericArguments, Attribute, AttrStyle, Data, DataEnum,
+    DataStruct, DeriveInput, Expr, Field, FieldMutability, GenericArgument,
+    Fields, FieldsNamed, FieldsUnnamed, Lifetime, MacroDelimiter, Meta,
+    MetaList, Path, PathArguments, PathSegment, Type, TypePath, TypeReference,
     Variant, Visibility,
 };
 
 
-// TODO add a feature flag to the attriubte to control enabling
-//      the contextual_error attribute using a build flag defined
-//      in Cargo.toml e.g. #[contextual_error(feature = "my-build-flag")]
-
 const TAG: &str = "[contextual_error]";
 
 #[proc_macro_attribute]
-pub fn contextual_error(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn contextual_error(attr: TokenStream, item: TokenStream) -> TokenStream {
     let DeriveInput {
         attrs: item_attrs,
         vis: item_vis,
@@ -28,8 +32,12 @@ pub fn contextual_error(_attr: TokenStream, item: TokenStream) -> TokenStream {
         generics: item_generics,
         data: item_data
     } = parse_macro_input!(item as DeriveInput);
-
-    let ctor_impl_block = generate_ctor_impl_block(&item_ident, &item_data);
+    let field_attrs = FieldAttrs::parse(attr).to_attr_vec();
+    let ctor_impl_block = generate_ctor_impl_block(
+        &item_ident,
+        &item_data,
+        &field_attrs,
+    );
     let output = DeriveInput {
         attrs: item_attrs,
         vis: item_vis,
@@ -37,8 +45,8 @@ pub fn contextual_error(_attr: TokenStream, item: TokenStream) -> TokenStream {
         generics: item_generics,
         data: match &item_data {
             Data::Union(_) => panic!("{TAG} Unions are not supported"),
-            Data::Enum(e) => Data::Enum(augment_enum(&e)),
-            Data::Struct(s) => Data::Struct(augment_struct(&s)),
+            Data::Enum(e) => Data::Enum(augment_enum(&e, &field_attrs)),
+            Data::Struct(s) => Data::Struct(augment_struct(&s, &field_attrs)),
         }
     };
     TokenStream::from(quote! {
@@ -47,7 +55,7 @@ pub fn contextual_error(_attr: TokenStream, item: TokenStream) -> TokenStream {
     })
 }
 
-fn augment_enum(e: &DataEnum) -> DataEnum {
+fn augment_enum(e: &DataEnum, field_attrs: &[Attribute]) -> DataEnum {
     let output_variants = e.variants.iter()
         .map(|Variant { attrs, ident, fields, discriminant }| {
             if discriminant.is_some() {
@@ -61,16 +69,32 @@ fn augment_enum(e: &DataEnum) -> DataEnum {
                     named: std::iter::empty()
                         .chain(n.named.iter().cloned())
                         .chain([
-                            location_field(location_name, enum_variant_field_vis()),
-                            backtrace_field(backtrace_name, enum_variant_field_vis()),
+                            location_field(
+                                location_name,
+                                enum_variant_field_vis(),
+                                field_attrs,
+                            ),
+                            backtrace_field(
+                                backtrace_name,
+                                enum_variant_field_vis(),
+                                field_attrs,
+                            ),
                         ])
                         .collect(),
                 }),
                 Fields::Unit => Fields::Named(FieldsNamed {
                     brace_token: Brace(Span2::call_site()),
                     named: [
-                        location_field(location_name, enum_variant_field_vis()),
-                        backtrace_field(backtrace_name, enum_variant_field_vis()),
+                        location_field(
+                            location_name,
+                            enum_variant_field_vis(),
+                            field_attrs,
+                        ),
+                        backtrace_field(
+                            backtrace_name,
+                            enum_variant_field_vis(),
+                            field_attrs,
+                        ),
                     ].into_iter().collect(),
                 }),
                 Fields::Unnamed(u) => Fields::Unnamed(FieldsUnnamed {
@@ -78,8 +102,16 @@ fn augment_enum(e: &DataEnum) -> DataEnum {
                     unnamed: std::iter::empty()
                         .chain(u.unnamed.iter().cloned()) // user-defined fields
                         .chain([
-                            location_field(None, enum_variant_field_vis()),
-                            backtrace_field(None, enum_variant_field_vis()),
+                            location_field(
+                                None,
+                                enum_variant_field_vis(),
+                                field_attrs
+                            ),
+                            backtrace_field(
+                                None,
+                                enum_variant_field_vis(),
+                                field_attrs
+                            ),
                         ])
                         .collect(),
                 })
@@ -99,7 +131,7 @@ fn augment_enum(e: &DataEnum) -> DataEnum {
     }
 }
 
-fn augment_struct(s: &DataStruct) -> DataStruct {
+fn augment_struct(s: &DataStruct, field_attrs: &[Attribute]) -> DataStruct {
     let location_name = Some(Ident2::new("location", Span2::call_site()));
     let backtrace_name = Some(Ident2::new("backtrace", Span2::call_site()));
     match &s.fields {
@@ -110,8 +142,16 @@ fn augment_struct(s: &DataStruct) -> DataStruct {
                 named: std::iter::empty()
                     .chain(n.named.iter().cloned()) // user-defined fields
                     .chain([
-                        location_field(location_name, struct_field_vis()),
-                        backtrace_field(backtrace_name, struct_field_vis()),
+                        location_field(
+                            location_name,
+                            struct_field_vis(),
+                            field_attrs,
+                        ),
+                        backtrace_field(
+                            backtrace_name,
+                            struct_field_vis(),
+                            field_attrs,
+                        ),
                     ])
                     .collect(),
             }),
@@ -122,8 +162,16 @@ fn augment_struct(s: &DataStruct) -> DataStruct {
             fields: Fields::Named(FieldsNamed {
                 brace_token: Brace(Span2::call_site()),
                 named: [
-                    location_field(location_name, struct_field_vis()),
-                    backtrace_field(backtrace_name, struct_field_vis()),
+                    location_field(
+                        location_name,
+                        struct_field_vis(),
+                        field_attrs
+                    ),
+                    backtrace_field(
+                        backtrace_name,
+                        struct_field_vis(),
+                        field_attrs
+                    ),
                 ].into_iter().collect(),
             }),
             semi_token: s.semi_token,
@@ -135,8 +183,16 @@ fn augment_struct(s: &DataStruct) -> DataStruct {
                 unnamed: std::iter::empty()
                     .chain(u.unnamed.iter().cloned()) // user-defined fields
                     .chain([
-                        location_field(None, struct_field_vis()),
-                        backtrace_field(None, struct_field_vis()),
+                        location_field(
+                            None,
+                            struct_field_vis(),
+                            field_attrs,
+                        ),
+                        backtrace_field(
+                            None,
+                            struct_field_vis(),
+                            field_attrs,
+                        ),
                     ])
                     .collect(),
             }),
@@ -151,9 +207,10 @@ fn augment_struct(s: &DataStruct) -> DataStruct {
 fn location_field(
     field_name: Option<Ident2>,
     vis: Visibility,
+    field_attrs: &[Attribute],
 ) -> Field {
     Field {
-        attrs: vec![/*none*/],
+        attrs: field_attrs.to_vec(),
         vis,
         mutability: FieldMutability::None,
         ident: field_name,
@@ -166,9 +223,10 @@ fn location_field(
 fn backtrace_field(
     field_name: Option<Ident2>,
     vis: Visibility,
+    field_attrs: &[Attribute],
 ) -> Field {
     Field {
-        attrs: vec![/*none*/],
+        attrs: field_attrs.to_vec(),
         vis,
         mutability: FieldMutability::None,
         ident: field_name,
@@ -248,11 +306,15 @@ fn backtrace_type() -> Type {
     })
 }
 
-fn generate_ctor_impl_block(type_name: &Ident2, item_data: &Data) -> TokenStream2 {
+fn generate_ctor_impl_block(
+    type_name: &Ident2,
+    item_data: &Data,
+    field_attrs: &[Attribute],
+) -> TokenStream2 {
     match &item_data {
         Data::Union(_) => panic!("{TAG} Unions are not supported"),
         Data::Enum(e) => {
-            let enum_ctors = generate_enum_ctors(&e);
+            let enum_ctors = generate_enum_ctors(&e, field_attrs);
             quote! {
                 impl #type_name {
                     #( #enum_ctors )*
@@ -260,7 +322,7 @@ fn generate_ctor_impl_block(type_name: &Ident2, item_data: &Data) -> TokenStream
             }
         },
         Data::Struct(s) => {
-            let struct_ctor = generate_struct_ctor(&s);
+            let struct_ctor = generate_struct_ctor(&s, field_attrs);
             quote! {
                 impl #type_name {
                     #struct_ctor
@@ -270,7 +332,10 @@ fn generate_ctor_impl_block(type_name: &Ident2, item_data: &Data) -> TokenStream
     }
 }
 
-fn generate_struct_ctor(s: &DataStruct) -> TokenStream2 {
+fn generate_struct_ctor(
+    s: &DataStruct,
+    field_attrs: &[Attribute],
+) -> TokenStream2 {
     match &s.fields {
         Fields::Named(n) => {
             let params = n.named.iter()
@@ -278,8 +343,14 @@ fn generate_struct_ctor(s: &DataStruct) -> TokenStream2 {
             let field_initializers = n.named.iter()
                 .map(|Field { ident, ty: _, .. }| quote! { #ident })
                 .chain([
-                    quote! { location: std::panic::Location::caller()        },
-                    quote! { backtrace: std::backtrace::Backtrace::capture() },
+                    quote! {
+                        #(#field_attrs)*
+                        location: std::panic::Location::caller()
+                    },
+                    quote! {
+                        #(#field_attrs)*
+                        backtrace: std::backtrace::Backtrace::capture()
+                    },
                 ]);
             quote! {
                 fn new( #(#params),* ) -> Self {
@@ -288,12 +359,18 @@ fn generate_struct_ctor(s: &DataStruct) -> TokenStream2 {
                     }
                 }
             }
-        }
+        },
         Fields::Unit => {
             let field_initializers = std::iter::empty()
                 .chain([
-                    quote! { location: std::panic::Location::caller()        },
-                    quote! { backtrace: std::backtrace::Backtrace::capture() },
+                    quote! {
+                        #(#field_attrs)*
+                        location: std::panic::Location::caller()
+                    },
+                    quote! {
+                        #(#field_attrs)*
+                        backtrace: std::backtrace::Backtrace::capture()
+                    },
                 ]);
             quote! {
                 fn new() -> Self {
@@ -317,8 +394,14 @@ fn generate_struct_ctor(s: &DataStruct) -> TokenStream2 {
                     quote! { #ident }
                 })
                 .chain([
-                    quote! { std::panic::Location::caller()       },
-                    quote! { std::backtrace::Backtrace::capture() },
+                    quote! {
+                        #(#field_attrs)*
+                        std::panic::Location::caller()
+                    },
+                    quote! {
+                        #(#field_attrs)*
+                        std::backtrace::Backtrace::capture()
+                    },
                 ]);
             quote! {
                 fn new( #(#params),* ) -> Self {
@@ -331,7 +414,10 @@ fn generate_struct_ctor(s: &DataStruct) -> TokenStream2 {
     }
 }
 
-fn generate_enum_ctors(e: &DataEnum) -> Vec<TokenStream2> {
+fn generate_enum_ctors(
+    e: &DataEnum,
+    field_attrs: &[Attribute],
+) -> Vec<TokenStream2> {
     e.variants.iter()
         .map(|Variant { ident, fields, .. }| {
             let variant_name = ident;
@@ -344,8 +430,14 @@ fn generate_enum_ctors(e: &DataEnum) -> Vec<TokenStream2> {
                     let field_initializers = n.named.iter()
                         .map(|Field { ident, ty: _, .. }| quote! { #ident })
                         .chain([
-                            quote! { location: std::panic::Location::caller()        },
-                            quote! { backtrace: std::backtrace::Backtrace::capture() },
+                            quote! {
+                                #(#field_attrs)*
+                                location: std::panic::Location::caller()
+                            },
+                            quote! {
+                                #(#field_attrs)*
+                                backtrace: std::backtrace::Backtrace::capture()
+                            },
                         ]);
                     quote! {
                         pub fn #ctor_name( #(#params),* ) -> Self {
@@ -358,8 +450,14 @@ fn generate_enum_ctors(e: &DataEnum) -> Vec<TokenStream2> {
                 Fields::Unit => {
                     let field_initializers = std::iter::empty()
                         .chain([
-                            quote! { location: std::panic::Location::caller()        },
-                            quote! { backtrace: std::backtrace::Backtrace::capture() },
+                            quote! {
+                                #(#field_attrs)*
+                                location: std::panic::Location::caller()
+                            },
+                            quote! {
+                                #(#field_attrs)*
+                                backtrace: std::backtrace::Backtrace::capture()
+                            },
                         ]);
                     quote! {
                         pub fn #ctor_name() -> Self {
@@ -383,8 +481,14 @@ fn generate_enum_ctors(e: &DataEnum) -> Vec<TokenStream2> {
                             quote! { #ident }
                         })
                         .chain([
-                            quote! { std::panic::Location::caller()       },
-                            quote! { std::backtrace::Backtrace::capture() },
+                            quote! {
+                                #(#field_attrs)*
+                                std::panic::Location::caller()
+                            },
+                            quote! {
+                                #(#field_attrs)*
+                                std::backtrace::Backtrace::capture()
+                            },
                         ]);
                     quote! {
                         pub fn #ctor_name( #(#params),* ) -> Self {
@@ -397,4 +501,106 @@ fn generate_enum_ctors(e: &DataEnum) -> Vec<TokenStream2> {
             }
         })
         .collect()
+}
+
+
+struct FieldAttrs {
+    build_flag: Option<FeatureFlagAttr>,
+}
+
+impl FieldAttrs {
+    fn parse(attr: TokenStream) -> Self {
+        let mut attr_iter = attr.into_iter().peekable();
+        let mut field_attrs = Self {
+            build_flag: None
+        };
+        while let Some(tt) = attr_iter.peek() {
+            match &*tt.to_string() {
+                "feature" => {
+                    let arg = FeatureFlagAttr::parse(&mut attr_iter);
+                    field_attrs.build_flag = Some(arg);
+                },
+                _ => panic!("{TAG} Expected attr name 'feature'")
+            }
+            // TODO comma for if/when there's more than 1 attr argument
+        }
+        field_attrs
+    }
+
+    fn to_attr_vec(&self) -> Vec<Attribute> {
+        let mut vec = vec![];
+        if let Some(build_flag) = &self.build_flag {
+            vec.push(Attribute {
+                pound_token: Pound(Span2::call_site()),
+                style: AttrStyle::Outer,
+                bracket_token: Bracket(Span2::call_site()),
+                meta: Meta::List(MetaList {
+                    path: Path {
+                        leading_colon: None,
+                        segments: [
+                            PathSegment {
+                                ident: Ident2::new("cfg", Span2::call_site()),
+                                arguments: PathArguments::None,
+                            },
+                        ].into_iter().collect(),
+                    },
+                    delimiter: MacroDelimiter::Paren(
+                        Paren(Span2::call_site())
+                    ),
+                    tokens: {
+                        let mut token_stream = build_flag.name_stream.clone();
+                        token_stream.extend(TokenStream2::from(
+                            TokenTree2::Punct(Punct2::new('=', Spacing2::Alone))
+                        ));
+                        token_stream.extend(build_flag.value.to_token_stream());
+                        token_stream
+                    },
+                }),
+            });
+        }
+        vec
+    }
+}
+
+// Currently ONLY recognizes the attribute arguments:
+// - feature = "<BUILD_FEATURE_NAME>"
+struct FeatureFlagAttr {
+    #[allow(unused)]
+    name: Ident2,
+    name_stream: TokenStream2,
+    value: Expr,
+}
+
+impl FeatureFlagAttr {
+    fn parse(attr_iter: &mut Peekable<IntoIter>) -> Self {
+        let attr_name_tt: TokenTree = attr_iter.next().unwrap();
+        assert_eq!(attr_name_tt.to_string(), "feature");
+
+        let name_stream: TokenStream2 = TokenStream::from(attr_name_tt).into();
+        let name: Ident2 = syn::parse2(name_stream.clone()).unwrap_or_else(|_| {
+            panic!("{TAG} Failed to parse feature attribute")
+        });
+
+        let _eq_tt = attr_iter.next();
+        let _eq = match _eq_tt {
+            Some(TokenTree::Punct(p)) => assert_eq!(p.as_char(), '='),
+            Some(tt) => panic!("{TAG} Unrecognized token tree: {tt}"),
+            None => panic!("{TAG} Expected '='"),
+        };
+
+        let value_tt = attr_iter.next();
+        let value: Expr = match value_tt {
+            Some(tt @ TokenTree::Literal(_)) => {
+                let stream: TokenStream2 = TokenStream::from(tt).into();
+                let expr: Expr = syn::parse2(stream).unwrap_or_else(|_| {
+                    panic!("{TAG} Failed to parse attr key-value pair")
+                });
+                expr
+            }
+            Some(tt) => panic!("{TAG} Expected attr value, got token tree {tt}"),
+            None => panic!("{TAG} Expected attr value"),
+        };
+
+        Self { name, name_stream, value }
+    }
 }

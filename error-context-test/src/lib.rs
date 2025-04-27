@@ -3,21 +3,21 @@
 
 use error_context_macro::contextual_error;
 
-#[contextual_error]
+#[contextual_error(feature = "example-build-flag")]
 #[derive(Debug)]
 pub struct TupleStructError(usize, String);
 
-#[contextual_error]
+#[contextual_error(feature = "example-build-flag")]
 #[derive(Debug)]
 pub struct NamedStructError {
     f0: String,
 }
 
-#[contextual_error]
+#[contextual_error(feature = "example-build-flag")]
 #[derive(Debug)]
 pub struct UnitStructError;
 
-#[contextual_error]
+#[contextual_error(feature = "example-build-flag")]
 #[derive(Debug)]
 pub enum EnumError {
     Tuple(usize),

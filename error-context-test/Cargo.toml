@@ -5,3 +5,9 @@ edition = "2024"
 
 [dependencies]
 error-context-macro = { path = "../error-context-macro" }
+
+[features]
+default = [
+    "example-build-flag"
+]
+example-build-flag = []
