@@ -11,7 +11,7 @@ use syn::{
     AngleBracketedGenericArguments, Data, DataEnum, DataStruct, DeriveInput,
     Field, FieldMutability, GenericArgument, Fields, FieldsNamed, FieldsUnnamed,
     Lifetime, Path, PathArguments, PathSegment, Type, TypePath, TypeReference,
-    Visibility,
+    Variant, Visibility,
 };
 
 
@@ -97,7 +97,7 @@ pub fn contextual_error(_attr: TokenStream, item: TokenStream) -> TokenStream {
 fn named_location_field() -> Field {
     Field {
         attrs: vec![/*none*/],
-        vis: Visibility::Public(Pub(Span2::call_site())),
+        vis: field_visibility(),
         mutability: FieldMutability::None,
         ident: Some(Ident2::new("location", Span2::call_site())),
         colon_token: Some(Colon(Span2::call_site())),
@@ -109,7 +109,7 @@ fn named_location_field() -> Field {
 fn named_backtrace_field() -> Field {
     Field {
         attrs: vec![/*none*/],
-        vis: Visibility::Public(Pub(Span2::call_site())),
+        vis: field_visibility(),
         mutability: FieldMutability::None,
         ident: Some(Ident2::new("backtrace", Span2::call_site())),
         colon_token: Some(Colon(Span2::call_site())),
@@ -121,7 +121,7 @@ fn named_backtrace_field() -> Field {
 fn unnamed_location_field() -> Field {
     Field {
         attrs: vec![/*none*/],
-        vis: Visibility::Public(Pub(Span2::call_site())),
+        vis: field_visibility(),
         mutability: FieldMutability::None,
         ident: None,
         colon_token: None,
@@ -133,7 +133,7 @@ fn unnamed_location_field() -> Field {
 fn unnamed_backtrace_field() -> Field {
     Field {
         attrs: vec![/*none*/],
-        vis: Visibility::Public(Pub(Span2::call_site())),
+        vis: field_visibility(),
         mutability: FieldMutability::None,
         ident: None,
         colon_token: None,
@@ -179,6 +179,10 @@ fn location_type() -> Type {
             },
         }))
     })
+}
+
+fn field_visibility() -> Visibility {
+    Visibility::Public(Pub(Span2::call_site()))
 }
 
 fn backtrace_type() -> Type {
