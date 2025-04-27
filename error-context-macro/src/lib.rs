@@ -1,7 +1,7 @@
 //!
 
 use proc_macro::TokenStream;
-use proc_macro2::{Ident as Ident2, Span as Span2};
+use proc_macro2::{Ident as Ident2, Span as Span2, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{
     parse_macro_input,
@@ -12,13 +12,6 @@ use syn::{
     Variant, Visibility,
 };
 
-
-
-// TODO: Generate a ctor for the type on which `#[contextual_error]` is used,
-//       because otherwise the Location and Backtrace need to be provided
-//       manually, which is super annoying.
-//       For structs this can be a single ctor called `new`, while for enums it
-//       should be a single ctor per enum variant carrying the variant's name.
 
 // TODO add a feature flag to the attriubte to control enabling
 //      the contextual_error attribute using a build flag defined
@@ -36,25 +29,26 @@ pub fn contextual_error(_attr: TokenStream, item: TokenStream) -> TokenStream {
         data: item_data
     } = parse_macro_input!(item as DeriveInput);
 
-    let output_data = match item_data {
-        Data::Union(_) => panic!("{TAG} Unions are not supported"),
-        Data::Enum(e) => Data::Enum(augment_enum(e)),
-        Data::Struct(s) => Data::Struct(augment_struct(s)),
-    };
+    let ctor_impl_block = generate_ctor_impl_block(&item_ident, &item_data);
     let output = DeriveInput {
         attrs: item_attrs,
         vis: item_vis,
         ident: item_ident,
         generics: item_generics,
-        data: output_data
+        data: match &item_data {
+            Data::Union(_) => panic!("{TAG} Unions are not supported"),
+            Data::Enum(e) => Data::Enum(augment_enum(&e)),
+            Data::Struct(s) => Data::Struct(augment_struct(&s)),
+        }
     };
     TokenStream::from(quote! {
         #output
+        #ctor_impl_block
     })
 }
 
-fn augment_enum(e: DataEnum) -> DataEnum {
-    let output_variants = e.variants.into_iter()
+fn augment_enum(e: &DataEnum) -> DataEnum {
+    let output_variants = e.variants.iter()
         .map(|Variant { attrs, ident, fields, discriminant }| {
             if discriminant.is_some() {
                 panic!("{TAG} Enum variant discriminants are not supported");
@@ -65,7 +59,7 @@ fn augment_enum(e: DataEnum) -> DataEnum {
                 Fields::Named(n) => Fields::Named(FieldsNamed {
                     brace_token: n.brace_token,
                     named: std::iter::empty()
-                        .chain(n.named.into_iter())
+                        .chain(n.named.iter().cloned())
                         .chain([
                             location_field(location_name, enum_variant_field_vis()),
                             backtrace_field(backtrace_name, enum_variant_field_vis()),
@@ -82,7 +76,7 @@ fn augment_enum(e: DataEnum) -> DataEnum {
                 Fields::Unnamed(u) => Fields::Unnamed(FieldsUnnamed {
                     paren_token: u.paren_token,
                     unnamed: std::iter::empty()
-                        .chain(u.unnamed.into_iter()) // user-defined fields
+                        .chain(u.unnamed.iter().cloned()) // user-defined fields
                         .chain([
                             location_field(None, enum_variant_field_vis()),
                             backtrace_field(None, enum_variant_field_vis()),
@@ -91,10 +85,10 @@ fn augment_enum(e: DataEnum) -> DataEnum {
                 })
             };
             Variant {
-                attrs,
-                ident,
+                attrs: attrs.clone(),
+                ident: ident.clone(),
                 fields: output_fields,
-                discriminant,
+                discriminant: discriminant.clone(),
             }
         })
         .collect();
@@ -105,16 +99,16 @@ fn augment_enum(e: DataEnum) -> DataEnum {
     }
 }
 
-fn augment_struct(s: DataStruct) -> DataStruct {
+fn augment_struct(s: &DataStruct) -> DataStruct {
     let location_name = Some(Ident2::new("location", Span2::call_site()));
     let backtrace_name = Some(Ident2::new("backtrace", Span2::call_site()));
-    match s.fields {
+    match &s.fields {
         Fields::Named(n) => DataStruct {
             struct_token: s.struct_token,
             fields: Fields::Named(FieldsNamed {
                 brace_token: Brace(Span2::call_site()),
                 named: std::iter::empty()
-                    .chain(n.named.into_iter()) // user-defined fields
+                    .chain(n.named.iter().cloned()) // user-defined fields
                     .chain([
                         location_field(location_name, struct_field_vis()),
                         backtrace_field(backtrace_name, struct_field_vis()),
@@ -139,7 +133,7 @@ fn augment_struct(s: DataStruct) -> DataStruct {
             fields: Fields::Unnamed(FieldsUnnamed {
                 paren_token: Paren(Span2::call_site()),
                 unnamed: std::iter::empty()
-                    .chain(u.unnamed.into_iter()) // user-defined fields
+                    .chain(u.unnamed.iter().cloned()) // user-defined fields
                     .chain([
                         location_field(None, struct_field_vis()),
                         backtrace_field(None, struct_field_vis()),
@@ -252,4 +246,155 @@ fn backtrace_type() -> Type {
             ].into_iter().collect()
         },
     })
+}
+
+fn generate_ctor_impl_block(type_name: &Ident2, item_data: &Data) -> TokenStream2 {
+    match &item_data {
+        Data::Union(_) => panic!("{TAG} Unions are not supported"),
+        Data::Enum(e) => {
+            let enum_ctors = generate_enum_ctors(&e);
+            quote! {
+                impl #type_name {
+                    #( #enum_ctors )*
+                }
+            }
+        },
+        Data::Struct(s) => {
+            let struct_ctor = generate_struct_ctor(&s);
+            quote! {
+                impl #type_name {
+                    #struct_ctor
+                }
+            }
+        },
+    }
+}
+
+fn generate_struct_ctor(s: &DataStruct) -> TokenStream2 {
+    match &s.fields {
+        Fields::Named(n) => {
+            let params = n.named.iter()
+                .map(|Field { ident, ty, .. }| quote! { #ident : #ty });
+            let field_initializers = n.named.iter()
+                .map(|Field { ident, ty: _, .. }| quote! { #ident })
+                .chain([
+                    quote! { location: std::panic::Location::caller()        },
+                    quote! { backtrace: std::backtrace::Backtrace::capture() },
+                ]);
+            quote! {
+                fn new( #(#params),* ) -> Self {
+                    Self {
+                        #(#field_initializers),*
+                    }
+                }
+            }
+        }
+        Fields::Unit => {
+            let field_initializers = std::iter::empty()
+                .chain([
+                    quote! { location: std::panic::Location::caller()        },
+                    quote! { backtrace: std::backtrace::Backtrace::capture() },
+                ]);
+            quote! {
+                fn new() -> Self {
+                    Self {
+                        #(#field_initializers),*
+                    }
+                }
+            }
+        },
+        Fields::Unnamed(u) => {
+            let params = u.unnamed.iter().enumerate()
+                .map(|(i, Field { ident: _, ty, .. })| {
+                    let ident = format!("field{i}");
+                    let ident = Ident2::new(&ident, Span2::call_site());
+                    quote! { #ident : #ty }
+                });
+            let field_initializers = u.unnamed.iter().enumerate()
+                .map(|(i, Field { ident: _, ty: _, .. })| {
+                    let ident = format!("field{i}");
+                    let ident = Ident2::new(&ident, Span2::call_site());
+                    quote! { #ident }
+                })
+                .chain([
+                    quote! { std::panic::Location::caller()       },
+                    quote! { std::backtrace::Backtrace::capture() },
+                ]);
+            quote! {
+                fn new( #(#params),* ) -> Self {
+                    Self(
+                        #(#field_initializers),*
+                    )
+                }
+            }
+        }
+    }
+}
+
+fn generate_enum_ctors(e: &DataEnum) -> Vec<TokenStream2> {
+    e.variants.iter()
+        .map(|Variant { ident, fields, .. }| {
+            let variant_name = ident;
+            let ctor_name = format!("new_{ident}");
+            let ctor_name = Ident2::new(&ctor_name, Span2::call_site());
+            match fields {
+                Fields::Named(n) => {
+                    let params = n.named.iter()
+                        .map(|Field { ident, ty, .. }| quote! { #ident : #ty });
+                    let field_initializers = n.named.iter()
+                        .map(|Field { ident, ty: _, .. }| quote! { #ident })
+                        .chain([
+                            quote! { location: std::panic::Location::caller()        },
+                            quote! { backtrace: std::backtrace::Backtrace::capture() },
+                        ]);
+                    quote! {
+                        pub fn #ctor_name( #(#params),* ) -> Self {
+                            Self::#variant_name {
+                                #(#field_initializers),*
+                            }
+                        }
+                    }
+                },
+                Fields::Unit => {
+                    let field_initializers = std::iter::empty()
+                        .chain([
+                            quote! { location: std::panic::Location::caller()        },
+                            quote! { backtrace: std::backtrace::Backtrace::capture() },
+                        ]);
+                    quote! {
+                        pub fn #ctor_name() -> Self {
+                            Self::#variant_name {
+                                #(#field_initializers),*
+                            }
+                        }
+                    }
+                },
+                Fields::Unnamed(u) => {
+                    let params = u.unnamed.iter().enumerate()
+                        .map(|(i, Field { ident: _, ty, .. })| {
+                            let ident = format!("field{i}");
+                            let ident = Ident2::new(&ident, Span2::call_site());
+                            quote! { #ident : #ty }
+                        });
+                    let field_initializers = u.unnamed.iter().enumerate()
+                        .map(|(i, Field { ident: _, ty: _, .. })| {
+                            let ident = format!("field{i}");
+                            let ident = Ident2::new(&ident, Span2::call_site());
+                            quote! { #ident }
+                        })
+                        .chain([
+                            quote! { std::panic::Location::caller()       },
+                            quote! { std::backtrace::Backtrace::capture() },
+                        ]);
+                    quote! {
+                        pub fn #ctor_name( #(#params),* ) -> Self {
+                            Self::#variant_name(
+                                #(#field_initializers),*
+                            )
+                        }
+                    }
+                },
+            }
+        })
+        .collect()
 }

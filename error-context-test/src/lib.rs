@@ -5,7 +5,7 @@ use error_context_macro::contextual_error;
 
 #[contextual_error]
 #[derive(Debug)]
-pub struct TupleStructError(usize);
+pub struct TupleStructError(usize, String);
 
 #[contextual_error]
 #[derive(Debug)]
@@ -30,9 +30,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn add_location_and_backtrace() {
         let tuple_strct_error = TupleStructError(
             0,
+            "blah".to_string(),
             std::panic::Location::caller(),
             std::backtrace::Backtrace::capture(),
         );
@@ -60,5 +61,19 @@ mod tests {
             location: std::panic::Location::caller(),
             backtrace: std::backtrace::Backtrace::capture(),
         };
+    }
+
+    #[test]
+    fn add_constructors() {
+        let tuple_strct_error = TupleStructError::new(
+            0,
+            "blah".to_string(),
+        );
+        let named_strct_error = NamedStructError::new("foo".to_string());
+        let unit_strct_error = UnitStructError::new();
+
+        let tuple_enum_error = EnumError::new_Tuple(300);
+        let named_enum_error = EnumError::new_Named(42);
+        let unit_enum_error = EnumError::new_Unit();
     }
 }
