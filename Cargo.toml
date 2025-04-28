@@ -4,3 +4,10 @@ members = [
     "error-context-macro",
     "error-context-test"
 ]
+
+[workspace.package]
+version = "0.2.0"
+authors = ["Joey Ezechiëls"]
+license = "Apache-2.0"
+edition = "2024"
+rust-version = "1.86.0"
