@@ -1,5 +1,11 @@
+# NOTE: The tests are in a separate crate because of the "example-build-flag"
+#       build feature, which is also a default feature. If the tests were in
+#       the `error-context` crate, that could potentially mess with consumer
+#       crate builds.
+
 [package]
 name = "error-context-test"
+description = "Contains tests for the contextual_error macro."
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -7,7 +13,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-error-context-macro = { path = "../error-context-macro" }
+error-context  = { path = "../error-context" }
 
 [features]
 default = [

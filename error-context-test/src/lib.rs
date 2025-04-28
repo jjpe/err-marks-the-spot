@@ -1,7 +1,7 @@
 //!
 #![allow(unused)]
 
-use error_context_macro::contextual_error;
+use error_context::{contextual_error, ErrorCtx};
 
 #[contextual_error(feature = "example-build-flag")]
 #[derive(Debug)]
@@ -30,41 +30,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn add_location_and_backtrace() {
+    fn add_error_ctx_field() {
         let tuple_strct_error = TupleStructError(
             0,
             "blah".to_string(),
-            std::panic::Location::caller(),
-            std::backtrace::Backtrace::capture(),
+            error_context::ErrorCtx::new(),
         );
         let named_strct_error = NamedStructError {
             f0: "foo".to_string(),
-            location: std::panic::Location::caller(),
-            backtrace: std::backtrace::Backtrace::capture(),
+            ctx: error_context::ErrorCtx::new(),
         };
         let unit_strct_error = UnitStructError {
-            location: std::panic::Location::caller(),
-            backtrace: std::backtrace::Backtrace::capture(),
+            ctx: error_context::ErrorCtx::new(),
         };
 
         let tuple_enum_error = EnumError::Tuple(
             300,
-            std::panic::Location::caller(),
-            std::backtrace::Backtrace::capture(),
+            error_context::ErrorCtx::new(),
         );
         let named_enum_error = EnumError::Named {
             f0: 42,
-            location: std::panic::Location::caller(),
-            backtrace: std::backtrace::Backtrace::capture(),
+            ctx: error_context::ErrorCtx::new(),
         };
         let unit_enum_error = EnumError::Unit {
-            location: std::panic::Location::caller(),
-            backtrace: std::backtrace::Backtrace::capture(),
+            ctx: error_context::ErrorCtx::new(),
         };
     }
 
     #[test]
-    fn add_constructors() {
+    fn use_ctors() {
         let tuple_strct_error = TupleStructError::new(
             0,
             "blah".to_string(),

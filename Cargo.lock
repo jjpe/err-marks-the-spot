@@ -27,7 +27,7 @@ dependencies = [
 name = "error-context-test"
 version = "0.2.0"
 dependencies = [
- "error-context-macro",
+ "error-context",
 ]
 
 [[package]]
