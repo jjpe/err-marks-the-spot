@@ -1,0 +1,12 @@
+[package]
+name = "error-context"
+description = "A façade crate that exposes the functionality provided by this workspace."
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+error-context-core  = { path = "../error-context-core"  }
+error-context-macro = { path = "../error-context-macro" }
