@@ -3,17 +3,17 @@
 
 use error_context::{contextual_error, ErrorCtx};
 
-#[contextual_error(feature = "example-build-flag")]
+#[contextual_error(feature = "example-build-flag", inline_ctors)]
 #[derive(Debug)]
 pub struct TupleStructError(usize, String);
 
-#[contextual_error(feature = "example-build-flag")]
+#[contextual_error(feature = "example-build-flag", inline_ctors(always))]
 #[derive(Debug)]
 pub struct NamedStructError {
     f0: String,
 }
 
-#[contextual_error(feature = "example-build-flag")]
+#[contextual_error(feature = "example-build-flag", inline_ctors(never))]
 #[derive(Debug)]
 pub struct UnitStructError;
 
@@ -60,14 +60,14 @@ mod tests {
     #[test]
     fn use_ctors() {
         let tuple_strct_error = TupleStructError::new(
-            0,
+            0_usize,
             "blah".to_string(),
         );
         let named_strct_error = NamedStructError::new("foo".to_string());
         let unit_strct_error = UnitStructError::new();
 
-        let tuple_enum_error = EnumError::new_Tuple(300);
-        let named_enum_error = EnumError::new_Named(42);
+        let tuple_enum_error = EnumError::new_Tuple(300_usize);
+        let named_enum_error = EnumError::new_Named(42_usize);
         let unit_enum_error = EnumError::new_Unit();
     }
 }

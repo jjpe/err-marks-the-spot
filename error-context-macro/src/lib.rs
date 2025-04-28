@@ -1,6 +1,9 @@
 //!
 
-use proc_macro::{token_stream::IntoIter, TokenStream, TokenTree};
+use proc_macro::{
+    token_stream::IntoIter,
+    Delimiter, TokenStream, TokenTree,
+};
 use proc_macro2::{
     Ident as Ident2, Punct as Punct2, Spacing as Spacing2, Span as Span2,
     TokenStream as TokenStream2, TokenTree as TokenTree2,
@@ -25,8 +28,11 @@ pub fn contextual_error(attr: TokenStream, item: TokenStream) -> TokenStream {
         generics: item_generics,
         data: item_data
     } = parse_macro_input!(item as DeriveInput);
-    let field_attrs = FieldAttrs::parse(attr).to_attr_vec();
+    let fattrs = FieldAttrs::parse(attr);
+    let field_attrs = fattrs.field_attr_vec();
+    let ctor_attrs = fattrs.ctor_attr_vec();
     let ctor_impl_block = generate_ctor_impl_block(
+        &ctor_attrs,
         &item_ident,
         &item_data,
         &field_attrs,
@@ -166,6 +172,7 @@ fn ctx_field(
 }
 
 fn generate_ctor_impl_block(
+    ctor_attrs: &[Attribute],
     type_name: &Ident2,
     item_data: &Data,
     field_attrs: &[Attribute],
@@ -173,7 +180,7 @@ fn generate_ctor_impl_block(
     match &item_data {
         Data::Union(_) => panic!("Unions are not supported"),
         Data::Enum(e) => {
-            let enum_ctors = generate_enum_ctors(&e, field_attrs);
+            let enum_ctors = generate_enum_ctors(&e, field_attrs, ctor_attrs);
             quote! {
                 impl #type_name {
                     #( #enum_ctors )*
@@ -181,7 +188,7 @@ fn generate_ctor_impl_block(
             }
         },
         Data::Struct(s) => {
-            let struct_ctor = generate_struct_ctor(&s, field_attrs);
+            let struct_ctor = generate_struct_ctor(&s, field_attrs, ctor_attrs);
             quote! {
                 impl #type_name {
                     #struct_ctor
@@ -194,6 +201,7 @@ fn generate_ctor_impl_block(
 fn generate_struct_ctor(
     s: &DataStruct,
     field_attrs: &[Attribute],
+    ctor_attrs: &[Attribute],
 ) -> TokenStream2 {
     match &s.fields {
         Fields::Named(n) => {
@@ -208,6 +216,7 @@ fn generate_struct_ctor(
                     },
                 ]);
             quote! {
+                #(#ctor_attrs)*
                 #[track_caller]
                 pub fn new( #(#params),* ) -> Self {
                     Self {
@@ -225,6 +234,7 @@ fn generate_struct_ctor(
                     },
                 ]);
             quote! {
+                #(#ctor_attrs)*
                 #[track_caller]
                 pub fn new() -> Self {
                     Self {
@@ -253,6 +263,7 @@ fn generate_struct_ctor(
                     },
                 ]);
             quote! {
+                #(#ctor_attrs)*
                 #[track_caller]
                 pub fn new( #(#params),* ) -> Self {
                     Self(
@@ -267,6 +278,7 @@ fn generate_struct_ctor(
 fn generate_enum_ctors(
     e: &DataEnum,
     field_attrs: &[Attribute],
+    ctor_attrs: &[Attribute],
 ) -> Vec<TokenStream2> {
     e.variants.iter()
         .map(|Variant { ident, fields, .. }| {
@@ -290,6 +302,7 @@ fn generate_enum_ctors(
                             },
                         ]);
                     quote! {
+                        #(#ctor_attrs)*
                         #[track_caller]
                         pub fn #ctor_name( #(#params),* ) -> Self {
                             Self::#variant_name {
@@ -307,6 +320,7 @@ fn generate_enum_ctors(
                             },
                         ]);
                     quote! {
+                        #(#ctor_attrs)*
                         #[track_caller]
                         pub fn #ctor_name() -> Self {
                             Self::#variant_name {
@@ -335,6 +349,7 @@ fn generate_enum_ctors(
                             },
                         ]);
                     quote! {
+                        #(#ctor_attrs)*
                         #[track_caller]
                         pub fn #ctor_name( #(#params),* ) -> Self {
                             Self::#variant_name(
@@ -349,59 +364,57 @@ fn generate_enum_ctors(
 }
 
 
+#[derive(Debug)]
 struct FieldAttrs {
     build_flag: Option<FeatureFlagAttr>,
+    inline_ctors: Option<InlineCtorsAttr>,
 }
 
 impl FieldAttrs {
     fn parse(attr: TokenStream) -> Self {
         let mut attr_iter = attr.into_iter().peekable();
         let mut field_attrs = Self {
-            build_flag: None
+            build_flag: None,
+            inline_ctors: None,
         };
+        let mut loop_count = 0;
         while let Some(tt) = attr_iter.peek() {
-            match &*tt.to_string() {
+            let peeked = tt.to_string();
+            // TODO
+            // if loop_count > 0 {
+            //     attr_arg::parse_comma_token(&mut attr_iter);
+            // }
+            match &*peeked {
+                "," if loop_count > 0 => {
+                    attr_arg::parse_comma_token(&mut attr_iter);
+                }
                 "feature" => {
                     let arg = FeatureFlagAttr::parse(&mut attr_iter);
                     field_attrs.build_flag = Some(arg);
                 },
-                _ => panic!("Expected attr name 'feature'")
+                "inline_ctors" => {
+                    let arg = InlineCtorsAttr::parse(&mut attr_iter);
+                    field_attrs.inline_ctors = Some(arg);
+                },
+                _ => panic!("Expected attr name 'feature', 'inline_ctors', got {peeked}")
             }
-            // TODO comma for if/when there's more than 1 attr argument
+            loop_count += 1;
         }
         field_attrs
     }
 
-    fn to_attr_vec(&self) -> Vec<Attribute> {
+    fn field_attr_vec(&self) -> Vec<Attribute> {
         let mut vec = vec![];
         if let Some(build_flag) = &self.build_flag {
-            vec.push(Attribute {
-                pound_token: Pound(Span2::call_site()),
-                style: AttrStyle::Outer,
-                bracket_token: Bracket(Span2::call_site()),
-                meta: Meta::List(MetaList {
-                    path: Path {
-                        leading_colon: None,
-                        segments: [
-                            PathSegment {
-                                ident: Ident2::new("cfg", Span2::call_site()),
-                                arguments: PathArguments::None,
-                            },
-                        ].into_iter().collect(),
-                    },
-                    delimiter: MacroDelimiter::Paren(
-                        Paren(Span2::call_site())
-                    ),
-                    tokens: {
-                        let mut token_stream = build_flag.name_stream.clone();
-                        token_stream.extend(TokenStream2::from(
-                            TokenTree2::Punct(Punct2::new('=', Spacing2::Alone))
-                        ));
-                        token_stream.extend(build_flag.value.to_token_stream());
-                        token_stream
-                    },
-                }),
-            });
+            vec.push(build_flag.to_attr());
+        }
+        vec
+    }
+
+    fn ctor_attr_vec(&self) -> Vec<Attribute> {
+        let mut vec = vec![];
+        if let Some(inline_ctors) = &self.inline_ctors {
+            vec.push(inline_ctors.to_attr());
         }
         vec
     }
@@ -410,6 +423,7 @@ impl FieldAttrs {
 
 // Currently ONLY recognizes the attribute arguments:
 // - feature = "<BUILD_FEATURE_NAME>"
+#[derive(Debug)]
 struct FeatureFlagAttr {
     #[allow(unused)]
     name: Ident2,
@@ -419,34 +433,171 @@ struct FeatureFlagAttr {
 
 impl FeatureFlagAttr {
     fn parse(attr_iter: &mut Peekable<IntoIter>) -> Self {
-        let attr_name_tt: TokenTree = attr_iter.next().unwrap();
-        assert_eq!(attr_name_tt.to_string(), "feature");
+        let attr_arg_name = "feature";
+        let (name, name_stream) = attr_arg::parse_name(attr_iter, attr_arg_name);
+        attr_arg::parse_eq_token(attr_iter, &attr_arg_name);
+        let value: Expr = attr_arg::parse_value_expr(attr_iter, attr_arg_name);
+        Self { name, name_stream, value }
+    }
 
+    fn to_attr(&self) -> Attribute {
+        Attribute {
+            pound_token: Pound(Span2::call_site()),
+            style: AttrStyle::Outer,
+            bracket_token: Bracket(Span2::call_site()),
+            meta: Meta::List(MetaList {
+                path: Path {
+                    leading_colon: None,
+                    segments: [
+                        PathSegment {
+                            ident: Ident2::new("cfg", Span2::call_site()),
+                            arguments: PathArguments::None,
+                        },
+                    ].into_iter().collect(),
+                },
+                delimiter: MacroDelimiter::Paren(Paren(Span2::call_site())),
+                tokens: {
+                    let mut token_stream = self.name_stream.clone();
+                    token_stream.extend(TokenStream2::from(
+                        TokenTree2::Punct(Punct2::new('=', Spacing2::Alone))
+                    ));
+                    token_stream.extend(self.value.to_token_stream());
+                    token_stream
+                },
+            }),
+        }
+    }
+}
+
+
+
+// Currently ONLY recognizes the attribute arguments:
+// - inline_ctors = true | false
+#[derive(Debug)]
+struct InlineCtorsAttr {
+    #[allow(unused)]
+    name: Ident2,
+    value: Option<Ident2>,
+}
+
+impl InlineCtorsAttr {
+    fn parse(attr_iter: &mut Peekable<IntoIter>) -> Self {
+        let attr_arg_name = "inline_ctors";
+        let (name, _stream) = attr_arg::parse_name(attr_iter, attr_arg_name);
+        let value = attr_arg::parse_parenthesized_value_ident(attr_iter);
+        Self { name, value }
+    }
+
+    fn to_attr(&self) -> Attribute {
+        Attribute {
+            pound_token: Pound(Span2::call_site()),
+            style: AttrStyle::Outer,
+            bracket_token: Bracket(Span2::call_site()),
+            meta: if let Some(value) = self.value.as_ref() {
+                Meta::List(MetaList {
+                    path: Path {
+                        leading_colon: None,
+                        segments: [
+                            PathSegment {
+                                ident: Ident2::new("inline", Span2::call_site()),
+                                arguments: PathArguments::None,
+                            },
+                        ].into_iter().collect(),
+                    },
+                    delimiter: MacroDelimiter::Paren(Paren(Span2::call_site())),
+                    tokens: TokenStream2::from(TokenTree2::Ident(value.clone())),
+                })
+            } else {
+                Meta::Path(Path {
+                    leading_colon: None,
+                    segments: [
+                        PathSegment {
+                            ident: Ident2::new("inline", Span2::call_site()),
+                            arguments: PathArguments::None,
+                        },
+                    ].into_iter().collect(),
+                })
+            },
+        }
+    }
+}
+
+
+
+mod attr_arg {
+    use super::*;
+
+    pub fn parse_name(
+        attr_iter: &mut Peekable<IntoIter>,
+        attr_arg_name: &str,
+    ) -> (Ident2, TokenStream2) {
+        let attr_name_tt: TokenTree = attr_iter.next().unwrap();
+        assert_eq!(attr_name_tt.to_string(), attr_arg_name);
         let name_stream: TokenStream2 = TokenStream::from(attr_name_tt).into();
         let name: Ident2 = syn::parse2(name_stream.clone()).unwrap_or_else(|_| {
-            panic!("Failed to parse feature attribute")
+            panic!("Failed to parse attribute argument: {attr_arg_name}")
         });
+        (name, name_stream)
+    }
 
+    pub fn parse_eq_token(
+        attr_iter: &mut Peekable<IntoIter>,
+        attr_arg_name: &str,
+    ) {
         let _eq_tt = attr_iter.next();
         let _eq = match _eq_tt {
-            Some(TokenTree::Punct(p)) => assert_eq!(p.as_char(), '='),
+            Some(TokenTree::Punct(p)) => {
+                assert_eq!(p.as_char(), '=', "{attr_arg_name}");
+            },
             Some(tt) => panic!("Unrecognized token tree: {tt}"),
             None => panic!("Expected '='"),
         };
+    }
 
-        let value_tt = attr_iter.next();
-        let value: Expr = match value_tt {
+    pub fn parse_value_expr(
+        attr_iter: &mut Peekable<IntoIter>,
+        attr_arg_name: &str
+    ) -> Expr {
+        match attr_iter.next() {
             Some(tt @ TokenTree::Literal(_)) => {
                 let stream: TokenStream2 = TokenStream::from(tt).into();
-                let expr: Expr = syn::parse2(stream).unwrap_or_else(|_| {
-                    panic!("Failed to parse attr key-value pair")
-                });
-                expr
+                syn::parse2::<Expr>(stream).unwrap_or_else(|_| panic!(
+                    "Failed to parse value expr of attribute argument {}",
+                    attr_arg_name
+                ))
             }
-            Some(tt) => panic!("Expected attr value, got token tree {tt}"),
-            None => panic!("Expected attr value"),
-        };
-
-        Self { name, name_stream, value }
+            Some(tt) => panic!(
+                "Expected value expr of attribute argument {}, got token tree {}",
+                attr_arg_name, tt
+            ),
+            None => panic!(
+                "Expected value expr of attribute argument {}",
+                attr_arg_name,
+            )
+        }
     }
+
+    pub fn parse_parenthesized_value_ident(
+        attr_iter: &mut Peekable<IntoIter>,
+    ) -> Option<Ident2> {
+        match attr_iter.next() {
+            Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis => {
+                let inner_stream = TokenStream2::from(g.stream());
+                let attr_arg_value = syn::parse2::<Ident2>(inner_stream)
+                    .expect("Expected a parenthesized value ident");
+                Some(attr_arg_value)
+            },
+            _ => None,
+        }
+    }
+
+    pub fn parse_comma_token(attr_iter: &mut Peekable<IntoIter>) {
+        let _comma_tt = attr_iter.next();
+        let _comma = match _comma_tt {
+            Some(TokenTree::Punct(p)) => assert_eq!(p.as_char(), ','),
+            Some(tt) => panic!("Unrecognized token tree: {tt}"),
+            None => panic!("Expected ','"),
+        };
+    }
+
 }
