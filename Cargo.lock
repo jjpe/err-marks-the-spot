@@ -3,6 +3,10 @@
 version = 4
 
 [[package]]
+name = "error-context-core"
+version = "0.2.0"
+
+[[package]]
 name = "error-context-macro"
 version = "0.2.0"
 dependencies = [
