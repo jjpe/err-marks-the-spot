@@ -198,9 +198,9 @@ fn generate_struct_ctor(
     match &s.fields {
         Fields::Named(n) => {
             let params = n.named.iter()
-                .map(|Field { ident, ty, .. }| quote! { #ident : #ty });
+                .map(|Field { ident, ty, .. }| quote! { #ident : impl Into<#ty> });
             let field_initializers = n.named.iter()
-                .map(|Field { ident, ty: _, .. }| quote! { #ident })
+                .map(|Field { ident, ty: _, .. }| quote! { #ident: #ident.into() })
                 .chain([
                     quote! {
                         #(#field_attrs)*
@@ -238,13 +238,13 @@ fn generate_struct_ctor(
                 .map(|(i, Field { ident: _, ty, .. })| {
                     let ident = format!("field{i}");
                     let ident = Ident2::new(&ident, Span2::call_site());
-                    quote! { #ident : #ty }
+                    quote! { #ident : impl Into<#ty> }
                 });
             let field_initializers = u.unnamed.iter().enumerate()
                 .map(|(i, Field { ident: _, ty: _, .. })| {
                     let ident = format!("field{i}");
                     let ident = Ident2::new(&ident, Span2::call_site());
-                    quote! { #ident }
+                    quote! { #ident.into() }
                 })
                 .chain([
                     quote! {
@@ -276,9 +276,13 @@ fn generate_enum_ctors(
             match fields {
                 Fields::Named(n) => {
                     let params = n.named.iter()
-                        .map(|Field { ident, ty, .. }| quote! { #ident : #ty });
+                        .map(|Field { ident, ty, .. }| {
+                            quote! { #ident : impl Into<#ty> }
+                        });
                     let field_initializers = n.named.iter()
-                        .map(|Field { ident, ty: _, .. }| quote! { #ident })
+                        .map(|Field { ident, ty: _, .. }| {
+                            quote! { #ident: #ident.into() }
+                        })
                         .chain([
                             quote! {
                                 #(#field_attrs)*
@@ -316,13 +320,13 @@ fn generate_enum_ctors(
                         .map(|(i, Field { ident: _, ty, .. })| {
                             let ident = format!("field{i}");
                             let ident = Ident2::new(&ident, Span2::call_site());
-                            quote! { #ident : #ty }
+                            quote! { #ident : impl Into<#ty> }
                         });
                     let field_initializers = u.unnamed.iter().enumerate()
                         .map(|(i, Field { ident: _, ty: _, .. })| {
                             let ident = format!("field{i}");
                             let ident = Ident2::new(&ident, Span2::call_site());
-                            quote! { #ident }
+                            quote! { #ident.into() }
                         })
                         .chain([
                             quote! {
