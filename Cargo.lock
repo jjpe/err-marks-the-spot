@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "error-context"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "error-context-core",
  "error-context-macro",
@@ -12,11 +12,11 @@ dependencies = [
 
 [[package]]
 name = "error-context-core"
-version = "0.2.0"
+version = "0.3.0"
 
 [[package]]
 name = "error-context-macro"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -25,7 +25,7 @@ dependencies = [
 
 [[package]]
 name = "error-context-test"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "error-context",
 ]
