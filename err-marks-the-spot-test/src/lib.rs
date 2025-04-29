@@ -1,23 +1,23 @@
 //!
 #![allow(unused)]
 
-use error_context_facade::{contextual_error, ErrorCtx};
+use err_marks_the_spot::{err_marks_the_spot, ErrorCtx};
 
-#[contextual_error(feature = "example-build-flag", inline_ctors)]
+#[err_marks_the_spot(feature = "example-build-flag", inline_ctors)]
 #[derive(Debug)]
 pub struct TupleStructError(usize, String);
 
-#[contextual_error(feature = "example-build-flag", inline_ctors(always))]
+#[err_marks_the_spot(feature = "example-build-flag", inline_ctors(always))]
 #[derive(Debug)]
 pub struct NamedStructError {
     f0: String,
 }
 
-#[contextual_error(feature = "example-build-flag", inline_ctors(never))]
+#[err_marks_the_spot(feature = "example-build-flag", inline_ctors(never))]
 #[derive(Debug)]
 pub struct UnitStructError;
 
-#[contextual_error(feature = "example-build-flag")]
+#[err_marks_the_spot(feature = "example-build-flag")]
 #[derive(Debug)]
 pub enum EnumError {
     Tuple(usize),
@@ -34,26 +34,26 @@ mod tests {
         let tuple_strct_error = TupleStructError(
             0,
             "blah".to_string(),
-            error_context_facade::ErrorCtx::new(),
+            err_marks_the_spot::ErrorCtx::new(),
         );
         let named_strct_error = NamedStructError {
             f0: "foo".to_string(),
-            ctx: error_context_facade::ErrorCtx::new(),
+            ctx: err_marks_the_spot::ErrorCtx::new(),
         };
         let unit_strct_error = UnitStructError {
-            ctx: error_context_facade::ErrorCtx::new(),
+            ctx: err_marks_the_spot::ErrorCtx::new(),
         };
 
         let tuple_enum_error = EnumError::Tuple(
             300,
-            error_context_facade::ErrorCtx::new(),
+            err_marks_the_spot::ErrorCtx::new(),
         );
         let named_enum_error = EnumError::Named {
             f0: 42,
-            ctx: error_context_facade::ErrorCtx::new(),
+            ctx: err_marks_the_spot::ErrorCtx::new(),
         };
         let unit_enum_error = EnumError::Unit {
-            ctx: error_context_facade::ErrorCtx::new(),
+            ctx: err_marks_the_spot::ErrorCtx::new(),
         };
     }
 

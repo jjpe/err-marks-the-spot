@@ -4,7 +4,7 @@
 #       crate builds.
 
 [package]
-name = "error-context-test"
+name = "err-marks-the-spot-test"
 description = "Contains tests for the contextual_error macro."
 version.workspace = true
 authors.workspace = true
@@ -13,7 +13,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-error-context-facade  = { path = "../error-context-facade" }
+err-marks-the-spot = { path = "../err-marks-the-spot" }
 
 [features]
 default = [

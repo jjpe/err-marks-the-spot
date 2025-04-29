@@ -1,15 +1,15 @@
 [workspace]
 resolver = "2"
 members = [
-    "error-context-facade",
-    "error-context-core",
-    "error-context-macro",
-    "error-context-test"
+    "err-marks-the-spot",
+    "err-marks-the-spot-core",
+    "err-marks-the-spot-macro",
+    "err-marks-the-spot-test"
 ]
 
 [workspace.package]
 version = "0.6.0"
-description = "Add context to your errors"
+description = "Make your Rust errors point thw way!"
 authors = ["Joey Ezechiëls"]
 license = "Apache-2.0"
 edition = "2024"

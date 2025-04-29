@@ -1,5 +1,5 @@
 [package]
-name = "error-context-facade"
+name = "err-marks-the-spot"
 description = "A façade crate that exposes the functionality provided by this workspace."
 version.workspace = true
 authors.workspace = true
@@ -8,5 +8,5 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-error-context-core  = { version = "0.6.0", path = "../error-context-core"  }
-error-context-macro = { version = "0.6.0", path = "../error-context-macro" }
+err-marks-the-spot-core  = { version = "0.6.0", path = "../err-marks-the-spot-core"  }
+err-marks-the-spot-macro = { version = "0.6.0", path = "../err-marks-the-spot-macro" }
