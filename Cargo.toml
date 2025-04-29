@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 description = "Add context to your errors"
 authors = ["Joey Ezechiëls"]
 license = "Apache-2.0"
