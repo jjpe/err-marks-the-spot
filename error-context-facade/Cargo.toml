@@ -8,5 +8,5 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-error-context-core  = { path = "../error-context-core"  }
-error-context-macro = { path = "../error-context-macro" }
+error-context-core  = { version = "0.6.0", path = "../error-context-core"  }
+error-context-macro = { version = "0.6.0", path = "../error-context-macro" }

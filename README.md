@@ -13,7 +13,7 @@ the source code where an error value was emitted, if it was annotated with the
 Add this to Cargo.toml:
 
 ``` toml
-error-context-facade = "0.4.0"
+error-context-facade = "0.6.0"
 ```
 
 Then given an error struct or enum:
