@@ -13,7 +13,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-error-context  = { path = "../error-context" }
+error-context-facade  = { path = "../error-context-facade" }
 
 [features]
 default = [

@@ -158,7 +158,7 @@ fn ctx_field(
                 leading_colon: None,
                 segments: vec![
                     PathSegment {
-                        ident: Ident2::new("error_context", Span2::call_site()),
+                        ident: Ident2::new("error_context_facade", Span2::call_site()),
                         arguments: PathArguments::None,
                     },
                     PathSegment {
@@ -212,7 +212,7 @@ fn generate_struct_ctor(
                 .chain([
                     quote! {
                         #(#field_attrs)*
-                        ctx: error_context::ErrorCtx::new(),
+                        ctx: error_context_facade::ErrorCtx::new(),
                     },
                 ]);
             quote! {
@@ -230,7 +230,7 @@ fn generate_struct_ctor(
                 .chain([
                     quote! {
                         #(#field_attrs)*
-                        ctx: error_context::ErrorCtx::new(),
+                        ctx: error_context_facade::ErrorCtx::new(),
                     },
                 ]);
             quote! {
@@ -259,7 +259,7 @@ fn generate_struct_ctor(
                 .chain([
                     quote! {
                         #(#field_attrs)*
-                        error_context::ErrorCtx::new(),
+                        error_context_facade::ErrorCtx::new(),
                     },
                 ]);
             quote! {
@@ -298,7 +298,7 @@ fn generate_enum_ctors(
                         .chain([
                             quote! {
                                 #(#field_attrs)*
-                                ctx: error_context::ErrorCtx::new(),
+                                ctx: error_context_facade::ErrorCtx::new(),
                             },
                         ]);
                     quote! {
@@ -316,7 +316,7 @@ fn generate_enum_ctors(
                         .chain([
                             quote! {
                                 #(#field_attrs)*
-                                ctx: error_context::ErrorCtx::new(),
+                                ctx: error_context_facade::ErrorCtx::new(),
                             },
                         ]);
                     quote! {
@@ -345,7 +345,7 @@ fn generate_enum_ctors(
                         .chain([
                             quote! {
                                 #(#field_attrs)*
-                                error_context::ErrorCtx::new()
+                                error_context_facade::ErrorCtx::new()
                             },
                         ]);
                     quote! {

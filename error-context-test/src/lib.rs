@@ -1,7 +1,7 @@
 //!
 #![allow(unused)]
 
-use error_context::{contextual_error, ErrorCtx};
+use error_context_facade::{contextual_error, ErrorCtx};
 
 #[contextual_error(feature = "example-build-flag", inline_ctors)]
 #[derive(Debug)]
@@ -34,26 +34,26 @@ mod tests {
         let tuple_strct_error = TupleStructError(
             0,
             "blah".to_string(),
-            error_context::ErrorCtx::new(),
+            error_context_facade::ErrorCtx::new(),
         );
         let named_strct_error = NamedStructError {
             f0: "foo".to_string(),
-            ctx: error_context::ErrorCtx::new(),
+            ctx: error_context_facade::ErrorCtx::new(),
         };
         let unit_strct_error = UnitStructError {
-            ctx: error_context::ErrorCtx::new(),
+            ctx: error_context_facade::ErrorCtx::new(),
         };
 
         let tuple_enum_error = EnumError::Tuple(
             300,
-            error_context::ErrorCtx::new(),
+            error_context_facade::ErrorCtx::new(),
         );
         let named_enum_error = EnumError::Named {
             f0: 42,
-            ctx: error_context::ErrorCtx::new(),
+            ctx: error_context_facade::ErrorCtx::new(),
         };
         let unit_enum_error = EnumError::Unit {
-            ctx: error_context::ErrorCtx::new(),
+            ctx: error_context_facade::ErrorCtx::new(),
         };
     }
 

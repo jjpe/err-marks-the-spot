@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "error-context",
+    "error-context-facade",
     "error-context-core",
     "error-context-macro",
     "error-context-test"

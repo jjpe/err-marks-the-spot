@@ -13,7 +13,7 @@ the source code where an error value was emitted, if it was annotated with the
 Add this to Cargo.toml:
 
 ``` toml
-error-context = "0.4.0"
+error-context-facade = "0.4.0"
 ```
 
 Then given an error struct or enum:
@@ -27,6 +27,8 @@ pub struct MyError {
 Modify the type like this:
 
 ``` rust
+use error_context_facade::contextual_error;
+
 #[contextual_error]
 pub struct MyError {
     f0: String,

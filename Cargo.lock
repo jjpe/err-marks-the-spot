@@ -3,16 +3,16 @@
 version = 4
 
 [[package]]
-name = "error-context"
+name = "error-context-core"
+version = "0.4.0"
+
+[[package]]
+name = "error-context-facade"
 version = "0.4.0"
 dependencies = [
  "error-context-core",
  "error-context-macro",
 ]
-
-[[package]]
-name = "error-context-core"
-version = "0.4.0"
 
 [[package]]
 name = "error-context-macro"
@@ -27,7 +27,7 @@ dependencies = [
 name = "error-context-test"
 version = "0.4.0"
 dependencies = [
- "error-context",
+ "error-context-facade",
 ]
 
 [[package]]

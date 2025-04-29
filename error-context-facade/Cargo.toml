@@ -1,5 +1,5 @@
 [package]
-name = "error-context"
+name = "error-context-facade"
 description = "A façade crate that exposes the functionality provided by this workspace."
 version.workspace = true
 authors.workspace = true
