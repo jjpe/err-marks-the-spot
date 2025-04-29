@@ -59,12 +59,9 @@ mod tests {
 
     #[test]
     fn use_ctors() {
-        let tuple_strct_error = TupleStructError::new(
-            0_usize,
-            "blah".to_string(),
-        );
-        let named_strct_error = NamedStructError::new("foo".to_string());
-        let unit_strct_error = UnitStructError::new();
+        let tuple_struct_error = TupleStructError::new(0_usize, "blah");
+        let named_struct_error = NamedStructError::new("foo");
+        let unit_struct_error = UnitStructError::new();
 
         let tuple_enum_error = EnumError::new_Tuple(300_usize);
         let named_enum_error = EnumError::new_Named(42_usize);
