@@ -1,13 +1,10 @@
 //!
 #![allow(non_snake_case)]
 
-use proc_macro::{
-    token_stream::IntoIter,
-    Delimiter, TokenStream, TokenTree
-};
+use proc_macro::{Delimiter, TokenStream, TokenTree, token_stream::IntoIter};
 use proc_macro2::{
-    Ident as Ident2, Punct as Punct2, Spacing as Spacing2,
-    Span as Span2, TokenStream as TokenStream2, TokenTree as TokenTree2,
+    Ident as Ident2, Punct as Punct2, Spacing as Spacing2, Span as Span2,
+    TokenStream as TokenStream2, TokenTree as TokenTree2,
 };
 use quote::quote;
 use regex::{Match, Regex};
@@ -16,12 +13,11 @@ use std::iter::Peekable;
 use std::ops::Range;
 use std::sync::LazyLock;
 use syn::{
-    parse_macro_input,
+    AttrStyle, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr,
+    ExprLit, Field, FieldMutability, Fields, FieldsNamed, FieldsUnnamed, Lit,
+    LitInt, LitStr, MacroDelimiter, Meta, MetaList, Path, PathArguments,
+    PathSegment, Type, TypePath, Variant, Visibility, parse_macro_input,
     token::{Brace, Bracket, Colon, Paren, Pound, Pub},
-    Attribute, AttrStyle, Data, DataEnum, DataStruct, DeriveInput, Expr,
-    ExprLit, Field, FieldMutability, Fields, FieldsNamed, FieldsUnnamed,
-    Lit, LitInt, LitStr, MacroDelimiter, Meta, MetaList, Path, PathArguments,
-    PathSegment, Type, TypePath, Variant, Visibility,
 };
 
 #[proc_macro_attribute]
@@ -32,7 +28,7 @@ pub fn err_marks_the_spot(attr: TokenStream, item: TokenStream) -> TokenStream {
         vis: item_vis,
         ident: item_ident,
         generics: item_generics,
-        data: item_data
+        data: item_data,
     } = &parse_macro_input!(item2 as DeriveInput);
 
     let type_attr_args = TypeAttrArgs::parse(attr);
@@ -55,19 +51,19 @@ pub fn err_marks_the_spot(attr: TokenStream, item: TokenStream) -> TokenStream {
             Data::Enum(e) => Data::Enum(augment_enum(
                 type_attr_args.build_feature.as_ref(),
                 &e,
-                &field_attrs
+                &field_attrs,
             )),
             Data::Struct(s) => Data::Struct(augment_struct(
                 type_attr_args.build_feature.as_ref(),
                 &s,
-                &field_attrs
+                &field_attrs,
             )),
-        }
+        },
     };
 
     let impl_Display_for_type: TokenStream2 = gen_impl_Display_for_type(
         type_attr_args.build_feature.as_ref(),
-        &type_item
+        &type_item,
     );
 
     TokenStream::from(quote! {
@@ -77,6 +73,7 @@ pub fn err_marks_the_spot(attr: TokenStream, item: TokenStream) -> TokenStream {
     })
 }
 
+#[rustfmt::skip]
 fn augment_enum(
     build_feature: Option<&BuildFeatureAttr>,
     e: &DataEnum,
@@ -147,6 +144,7 @@ fn augment_enum(
     }
 }
 
+#[rustfmt::skip]
 fn augment_struct(
     build_feature: Option<&BuildFeatureAttr>,
     s: &DataStruct,
@@ -241,11 +239,11 @@ fn ctx_field(
                     },
                     PathSegment {
                         ident: Ident2::new("ErrorCtx", Span2::call_site()),
-                        arguments: PathArguments::None
+                        arguments: PathArguments::None,
                     },
                 ].into_iter().collect()
             },
-        })
+        }),
     }
 }
 
@@ -441,7 +439,6 @@ fn generate_enum_ctors(
         .collect()
 }
 
-
 #[derive(Debug)]
 struct TypeAttrArgs {
     build_feature: Option<BuildFeatureAttr>,
@@ -497,7 +494,6 @@ impl TypeAttrArgs {
         vec
     }
 }
-
 
 // Currently ONLY recognizes the attribute arguments:
 // - feature = "<BUILD_FEATURE_NAME>"
@@ -557,8 +553,6 @@ impl BuildFeatureAttr {
     }
 }
 
-
-
 // Currently ONLY recognizes the attribute arguments:
 // - inline_ctors = true | false
 #[derive(Debug)]
@@ -610,8 +604,6 @@ impl InlineCtorsAttr {
     }
 }
 
-
-
 mod attr_arg {
     use super::*;
 
@@ -644,7 +636,7 @@ mod attr_arg {
 
     pub fn parse_value_expr(
         attr_iter: &mut Peekable<IntoIter>,
-        attr_arg_name: &str
+        attr_arg_name: &str,
     ) -> Expr {
         match attr_iter.next() {
             Some(tt @ TokenTree::Literal(_)) => {
@@ -661,7 +653,7 @@ mod attr_arg {
             None => panic!(
                 "Expected value expr of attribute argument {}",
                 attr_arg_name,
-            )
+            ),
         }
     }
 
@@ -687,13 +679,11 @@ mod attr_arg {
             None => panic!("Expected ','"),
         };
     }
-
 }
-
 
 fn gen_impl_Display_for_type(
     build_feature: Option<&BuildFeatureAttr>,
-    type_item: &DeriveInput
+    type_item: &DeriveInput,
 ) -> TokenStream2 {
     let type_item_name = &type_item.ident;
     let type_item_docstrs: Vec<String> = get_docstrs_from_attrs(&type_item.attrs);
@@ -755,7 +745,7 @@ fn gen_impl_Display_for_type(
             } else {
                 // Write an empty line between original msg & ErrorCtx:
                 quote! { writeln!(f, "")?; }
-            }
+            },
         ])
         .chain(if let Data::Struct(s) = &type_item.data {
             // ErrorCtx docstring extension:
@@ -764,9 +754,6 @@ fn gen_impl_Display_for_type(
             vec![]
         })
         .collect();
-
-
-
 
     let enum_impl_Display_contents: Vec<TokenStream2> = type_item_docstrs.iter()
         .filter(|_| matches!(item_field_map, FieldMap::Enum(_)))
@@ -928,7 +915,6 @@ fn gen_impl_Display_for_type(
             }
         }
     }
-
 }
 
 fn get_docstrs_from_attrs(attrs: &[Attribute]) -> Vec<String> {
@@ -967,7 +953,6 @@ fn modify_docstr(
             preamble.to_string() + EMPTY_FMT_STR + postamble
         })
 }
-
 
 /// Find the struct/enum fields used in a docstring, and return
 /// them in the order thay they occur in within the string.
@@ -1054,12 +1039,10 @@ impl quote::ToTokens for FieldIdToken {
     }
 }
 
-
 enum FieldMap {
     Struct(HashMap<String, FieldIdToken>),
     Enum(HashMap<Ident2, HashMap<String, FieldIdToken>>), // for each variant
 }
-
 
 fn single_field_mapping(
     ident: Option<Ident2>,

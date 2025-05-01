@@ -2,7 +2,6 @@
 
 use ansi_term::Color;
 
-
 #[derive(Debug)]
 pub struct ErrorCtx {
     location: &'static std::panic::Location<'static>,

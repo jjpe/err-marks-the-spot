@@ -1,8 +1,7 @@
 //!
 #![allow(unused)]
 
-use err_marks_the_spot::{err_marks_the_spot, ErrorCtx};
-
+use err_marks_the_spot::{ErrorCtx, err_marks_the_spot};
 
 /// FOo qux baz {0} {1}
 ///   - BaR Quux {0}.
@@ -79,7 +78,6 @@ mod tests {
             #[cfg(feature = "example-build-flag")]
             ctx: err_marks_the_spot::ErrorCtx::new(),
         };
-
     }
 
     #[test]
@@ -91,12 +89,14 @@ mod tests {
         let unit_struct_error = UnitStructError::new();
         println!("{unit_struct_error}");
 
+        #[rustfmt::skip]
         let tuple_enum_error = EnumError::new_Tuple(
             300_usize,
             "tuple variant".to_string(),
             false,
         );
         println!("{tuple_enum_error}");
+        #[rustfmt::skip]
         let named_enum_error = EnumError::new_Named(
             42_u8,
             "named variant".to_string(),
@@ -104,6 +104,5 @@ mod tests {
         println!("{named_enum_error}");
         let unit_enum_error = EnumError::new_Unit();
         println!("{unit_enum_error}");
-
     }
 }
