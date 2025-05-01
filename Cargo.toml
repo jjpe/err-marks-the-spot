@@ -16,4 +16,5 @@ edition = "2024"
 rust-version = "1.86.0"
 
 [workspace.dependencies]
+ansi_term = "0.12.1"
 regex = "1.11.1"
