@@ -36,6 +36,35 @@ pub enum EnumError {
     Unit,
 }
 
+
+
+// /// An error container.
+#[err_marks_the_spot(feature = "example-build-flag")]
+#[derive(Debug)]
+pub enum ContainerContainerError {
+    /// Container: {0}
+    ContainerError(ContainerError),
+}
+
+// /// An error container.
+#[err_marks_the_spot(feature = "example-build-flag")]
+#[derive(Debug)]
+pub enum ContainerError {
+    /// Blah: {0}
+    BlahError(BlahError),
+}
+
+#[err_marks_the_spot(feature = "example-build-flag")]
+/// This is a blah error;
+///   - field0 = {field0}
+///   - field1 = {field1}
+#[derive(Debug)]
+pub struct BlahError {
+    field0: String,
+    field1: usize,
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,5 +133,19 @@ mod tests {
         println!("{named_enum_error}");
         let unit_enum_error = EnumError::new_Unit();
         println!("{unit_enum_error}");
+    }
+
+    #[test]
+    fn container_error() {
+        let blah_error = BlahError::new("blah error msg", 57_usize);
+        println!("{blah_error}");
+        let container_error = ContainerError::new_BlahError(blah_error);
+        println!("{container_error}");
+        let container_container_error =
+            ContainerContainerError::new_ContainerError(container_error);
+        println!("{container_container_error}");
+
+        // let container_error = ContainerError::new_Blah2Error("blah error msg", 57_usize);
+        // println!("{container_error}");
     }
 }

@@ -701,8 +701,40 @@ fn gen_impl_Display_for_type(
         }
         Data::Struct(s) => FieldMap::Struct(create_fields_map(&s.fields)),
     };
+    let struct_impl_Display_contents = get_struct_impl_Display_contents(
+        build_feature,
+        type_item,
+        &type_item_docstrs,
+        &item_field_map,
+    );
+    let enum_impl_Display_contents = get_enum_impl_Display_contents(
+        build_feature,
+        type_item,
+        &item_field_map,
+    );
+    let impl_Display_contents = if let FieldMap::Struct(_) = item_field_map {
+        quote! { #struct_impl_Display_contents }
+    } else {
+        quote! { #enum_impl_Display_contents }
+    };
+    quote! {
+        impl std::fmt::Display for #type_item_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                #impl_Display_contents
+                Ok(())
+            }
+        }
+    }
+}
 
-    let struct_impl_Display_contents: Vec<TokenStream2> = type_item_docstrs.iter()
+fn get_struct_impl_Display_contents(
+    build_feature: Option<&BuildFeatureAttr>,
+    type_item: &DeriveInput,
+    type_item_docstrs: &[String],
+    item_field_map: &FieldMap,
+) -> TokenStream2 {
+    let type_item_name = &type_item.ident;
+    let quotes: Vec<TokenStream2> = type_item_docstrs.iter()
         .filter(|_| matches!(item_field_map, FieldMap::Struct(_)))
         .map(|item_docstr| {
             let item_docstr_fields = find_docstring_fields(item_docstr);
@@ -754,165 +786,151 @@ fn gen_impl_Display_for_type(
             vec![]
         })
         .collect();
+    quote! { #(#quotes)* }
+}
 
-    let enum_impl_Display_contents: Vec<TokenStream2> = type_item_docstrs.iter()
-        .filter(|_| matches!(item_field_map, FieldMap::Enum(_)))
-        .map(|item_docstr| {
+fn get_enum_impl_Display_contents(
+    build_feature: Option<&BuildFeatureAttr>,
+    type_item: &DeriveInput,
+    item_field_map: &FieldMap,
+) -> TokenStream2 {
+    let FieldMap::Enum(field_map) = &item_field_map else { return quote!{} };
+    let Data::Enum(data) = &type_item.data else { return quote!{} };
+    let DataEnum { variants, .. } = data;
 
-            let FieldMap::Enum(field_map) = &item_field_map else { unreachable!() };
-            let Data::Enum(DataEnum { variants, .. }) = &type_item.data
-            else { unreachable!() };
+    let variant_writelns: Vec<_> = variants.iter()
+        .map(|Variant { attrs, ident: variant_name, fields, .. }| {
+            let vdocstrs = get_docstrs_from_attrs(attrs);
 
-            let variant_writelns: Vec<_> = variants.iter()
-                .map(|Variant { attrs, ident: variant_name, fields, .. }| {
-                    let vdocstrs = get_docstrs_from_attrs(attrs);
-
-                    let vbindings: Vec<TokenStream2> = match fields {
-                        Fields::Named(n) => n.named.iter()
-                            .map(|field| field.ident.clone().unwrap())
-                            .map(|field_name| quote! { #field_name })
-                            .collect(),
-                        Fields::Unit => vec![],
-                        Fields::Unnamed(u) => u.unnamed.iter()
-                            .enumerate()
-                            .map(|(i, field)| {
-                                field.ident.clone().unwrap_or_else(|| {
-                                    Ident2::new(
-                                        &format!("f{i}"),
-                                        Span2::call_site()
-                                    )
-                                })
-                            })
-                            .map(|field_name| quote! { #field_name })
-                            .collect(),
-                    };
-
-                    let vbind_list = match fields {
-                        Fields::Named(_)   => quote! { { #(#vbindings ,)*      } },
-                        Fields::Unit       => quote! { { #(#vbindings ,)*      } },
-                        Fields::Unnamed(_) => quote! { ( #(#vbindings ,)*      ) },
-                    };
-                    let vbind_list_with_ctx = match fields {
-                        Fields::Named(_)   => quote! { { #(#vbindings ,)* ctx, } },
-                        Fields::Unit       => quote! { { #(#vbindings ,)* ctx, } },
-                        Fields::Unnamed(_) => quote! { ( #(#vbindings ,)* ctx, ) },
-                    };
-
-                    let vdocstr_writelns: Vec<TokenStream2> = vdocstrs.iter()
-                        .map(|variant_docstr| {
-                            let variant_docstr_fields = find_docstring_fields(
-                                variant_docstr
-                            );
-                            let modified_variant_docstr = modify_docstr(
-                                &variant_docstr,
-                                &variant_docstr_fields
-                            );
-                            let trimmed_variant_docstr = LitStr::new(
-                                &modified_variant_docstr,
+            let vbindings: Vec<TokenStream2> = match fields {
+                Fields::Named(n) => n.named.iter()
+                    .map(|field| field.ident.clone().unwrap())
+                    .map(|field_name| quote! { #field_name })
+                    .collect(),
+                Fields::Unit => vec![],
+                Fields::Unnamed(u) => u.unnamed.iter()
+                    .enumerate()
+                    .map(|(i, field)| {
+                        field.ident.clone().unwrap_or_else(|| {
+                            Ident2::new(
+                                &format!("f{i}"),
                                 Span2::call_site()
-                            );
-                            let variant_docstr_fields: Vec<Ident2> =
-                                variant_docstr_fields
-                                .iter()
-                                .map(|(_pos, field_name)| {
-                                    let enum_field_map = field_map.get(variant_name)
-                                        .unwrap_or_else(|| panic!(
-                                            "Type {} no has no variant '{}'",
-                                            type_item.ident, variant_name
-                                        ));
-                                    let field_token = enum_field_map
-                                        .get(*field_name)
-                                        .unwrap_or_else(|| panic!(
-                                            "Type variant {}::{} no has no field '{}'",
-                                            type_item.ident, variant_name, field_name
-                                        ));
-                                    match field_token {
-                                        FieldIdToken::Ident(ident) => ident.clone(),
-                                        FieldIdToken::Literal(lit) => Ident2::new(
-                                            &format!("f{lit}"),
-                                            Span2::call_site()
-                                        ),
-                                    }
-                                })
-                                .collect();
-                            quote! {
-                                writeln!(
-                                    f,
-                                    #trimmed_variant_docstr,
-                                    #(& #variant_docstr_fields),*
-                                )?;
+                            )
+                        })
+                    })
+                    .map(|field_name| quote! { #field_name })
+                    .collect(),
+            };
+
+            let vbind_list = match fields {
+                Fields::Named(_)   => quote! { { #(#vbindings ,)*      } },
+                Fields::Unit       => quote! { { #(#vbindings ,)*      } },
+                Fields::Unnamed(_) => quote! { ( #(#vbindings ,)*      ) },
+            };
+            let vbind_list_with_ctx = match fields {
+                Fields::Named(_)   => quote! { { #(#vbindings ,)* ctx, } },
+                Fields::Unit       => quote! { { #(#vbindings ,)* ctx, } },
+                Fields::Unnamed(_) => quote! { ( #(#vbindings ,)* ctx, ) },
+            };
+
+            let vdocstr_writelns: Vec<TokenStream2> = vdocstrs.iter()
+                .map(|variant_docstr| {
+                    let variant_docstr_fields = find_docstring_fields(
+                        variant_docstr
+                    );
+                    let modified_variant_docstr = modify_docstr(
+                        &variant_docstr,
+                        &variant_docstr_fields
+                    );
+                    let trimmed_variant_docstr = LitStr::new(
+                        &modified_variant_docstr,
+                        Span2::call_site()
+                    );
+                    let variant_docstr_fields: Vec<Ident2> =
+                        variant_docstr_fields
+                        .iter()
+                        .map(|(_pos, field_name)| {
+                            let enum_field_map = field_map.get(variant_name)
+                                .unwrap_or_else(|| panic!(
+                                    "Type {} no has no variant '{}'",
+                                    type_item.ident, variant_name
+                                ));
+                            let field_token = enum_field_map
+                                .get(*field_name)
+                                .unwrap_or_else(|| panic!(
+                                    "Type variant {}::{} no has no field '{}'",
+                                    type_item.ident, variant_name, field_name
+                                ));
+                            match field_token {
+                                FieldIdToken::Ident(ident) => ident.clone(),
+                                FieldIdToken::Literal(lit) => Ident2::new(
+                                    &format!("f{lit}"),
+                                    Span2::call_site()
+                                ),
                             }
                         })
-                        .chain([
-                            // Write an empty line between original msg & ErrorCtx,
-                            // but only perform the writeln!() call if the consumer
-                            // crate is built with the build feature enabled, or
-                            // without using the `feature` attribute argument:
-                            if let Some(bf) = build_feature {
-                                assert_eq!(
-                                    bf.name,
-                                    Ident2::new("feature", Span2::call_site())
-                                );
-                                let feature = &bf.value;
-                                quote! {
-                                    #[cfg(feature = #feature)]
-                                    writeln!(f, "")?;
-                                    #[cfg(feature = #feature)]
-                                    writeln!(f, "{}", &ctx)?;
-                                }
-                            } else {
-                                quote! {
-                                    writeln!(f, "")?;
-                                    writeln!(f, "{}", &ctx)?;
-                                }
-                            }
-                        ])
                         .collect();
-
+                    quote! {
+                        writeln!(
+                            f,
+                            #trimmed_variant_docstr,
+                            #(& #variant_docstr_fields),*
+                        )?;
+                    }
+                })
+                .chain([
+                    // Write an empty line between original msg & ErrorCtx,
+                    // but only perform the writeln!() call if the consumer
+                    // crate is built with the build feature enabled, or
+                    // without using the `feature` attribute argument:
                     if let Some(bf) = build_feature {
+                        assert_eq!(
+                            bf.name,
+                            Ident2::new("feature", Span2::call_site())
+                        );
                         let feature = &bf.value;
                         quote! {
                             #[cfg(feature = #feature)]
-                            Self :: #variant_name  #vbind_list_with_ctx  => {
-                                #( #vdocstr_writelns )*
-                            },
-
-                            #[cfg(not(feature = #feature))]
-                            Self :: #variant_name  #vbind_list  => {
-                                #( #vdocstr_writelns )*
-                            },
+                            writeln!(f, "")?;
+                            #[cfg(feature = #feature)]
+                            writeln!(f, "{}", &ctx)?;
                         }
                     } else {
                         quote! {
-                            Self :: #variant_name  #vbind_list_with_ctx  => {
-                                #( #vdocstr_writelns )*
-                            },
+                            writeln!(f, "")?;
+                            writeln!(f, "{}", &ctx)?;
                         }
                     }
-
-                })
+                ])
                 .collect();
 
-            quote! {
-                match self {
-                    #( #variant_writelns )*
+            if let Some(bf) = build_feature {
+                let feature = &bf.value;
+                quote! {
+                    #[cfg(feature = #feature)]
+                    Self :: #variant_name  #vbind_list_with_ctx  => {
+                        #( #vdocstr_writelns )*
+                    },
+
+                    #[cfg(not(feature = #feature))]
+                    Self :: #variant_name  #vbind_list  => {
+                        #( #vdocstr_writelns )*
+                    },
+                }
+            } else {
+                quote! {
+                    Self :: #variant_name  #vbind_list_with_ctx  => {
+                        #( #vdocstr_writelns )*
+                    },
                 }
             }
+
         })
         .collect();
 
-    let impl_Display_contents = if matches!(item_field_map, FieldMap::Struct(_)) {
-        quote! { #( #struct_impl_Display_contents )* }
-    } else {
-        // quote! { #( #enum_impl_Display_contents )* }
-        quote! { #(#enum_impl_Display_contents)* }
-    };
     quote! {
-        impl std::fmt::Display for #type_item_name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                #impl_Display_contents
-                Ok(())
-            }
+        match self {
+            #( #variant_writelns )*
         }
     }
 }
