@@ -46,5 +46,11 @@ pkgs.mkShell {
   shellHook = ''
       # >&2 echo "${tag} Executing 'cargo clean'..."
       # cargo clean
+
+      cargo-publish-workspace() {
+          cargo publish -p err-marks-the-spot-core
+          cargo publish -p err-marks-the-spot-macro
+          cargo publish -p err-marks-the-spot
+      }
   '';
 }
