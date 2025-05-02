@@ -8,5 +8,5 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-err-marks-the-spot-core  = { version = "0.8.0", path = "../err-marks-the-spot-core"  }
-err-marks-the-spot-macro = { version = "0.8.0", path = "../err-marks-the-spot-macro" }
+err-marks-the-spot-core  = { version = "0.9.0", path = "../err-marks-the-spot-core"  }
+err-marks-the-spot-macro = { version = "0.9.0", path = "../err-marks-the-spot-macro" }

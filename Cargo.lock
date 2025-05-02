@@ -22,7 +22,7 @@ dependencies = [
 
 [[package]]
 name = "err-marks-the-spot"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "err-marks-the-spot-core",
  "err-marks-the-spot-macro",
@@ -30,14 +30,14 @@ dependencies = [
 
 [[package]]
 name = "err-marks-the-spot-core"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "ansi_term",
 ]
 
 [[package]]
 name = "err-marks-the-spot-macro"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -47,7 +47,7 @@ dependencies = [
 
 [[package]]
 name = "err-marks-the-spot-test"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "err-marks-the-spot",
 ]
